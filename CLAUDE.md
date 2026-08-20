@@ -36,9 +36,24 @@ I want to learn good habits while I learn Flask, so:
 ## Project facts
 
 - Managed with **uv**, `src/` layout, Python 3.14.
-- Run the app: `uv run learn-flask`
+- Run the app: `uv run server`
 - That command comes from `[project.scripts]` in `pyproject.toml`, which points at
   the `main()` function in `src/learn_flask/main.py`.
 - After changing `[project.scripts]`, run `uv sync` — that section is only read at
   install time. Changes to `main.py` need no sync.
 - Install a package: `uv add <package>` (this updates `pyproject.toml` for me).
+
+## The API so far
+
+An in-memory product list in `main.py` (a plain Python list — it resets every
+restart). Routes:
+
+- `GET /products` — filter by any field via query string, e.g. `?category=Audio`
+- `GET /products/<id>` — one product
+- `POST /products` — create; server assigns the id, returns `201`
+- `PATCH /products/<id>` — partial update
+- `DELETE /products/<id>` — remove
+
+Known gaps, not yet done: `GET`/`DELETE` return `200` on a missing id instead of
+`404`, errors return plain text instead of JSON, and neither `POST` nor `PATCH`
+validates input (a missing or non-numeric field is a `500`).

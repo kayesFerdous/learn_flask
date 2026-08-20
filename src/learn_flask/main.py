@@ -80,6 +80,33 @@ def get_product(product_id):
         return f"Product id: {product_id} not found"
 
 
+@app.post("/products")
+def create_product():
+    data = request.get_json()
+
+    numeric_keys = ["price", "stock"]
+
+    for key in data:
+        if key in numeric_keys:
+            data[key] = int(data[key])
+
+    new_id = len(products)
+    while new_id in [p["id"] for p in products]:
+        new_id += 1
+
+    new_product = {
+        "id": new_id,
+        "name": data["name"],
+        "price": data["price"],
+        "category": data["category"],
+        "stock": data["stock"],
+    }
+
+    products.append(new_product)
+
+    return jsonify(new_product), 201
+
+
 @app.get("/products")
 def search_product():
     args = request.args.to_dict()
