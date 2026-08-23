@@ -1,0 +1,11 @@
+services:
+  api:
+    build: .
+    image: learn-flask:1.0
+
+    container_name: learn-flask
+
+    ports:
+      - "3000:3000"
+
+    restart: unless-stopped

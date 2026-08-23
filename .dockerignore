@@ -1,10 +1,28 @@
+# Virtualenv — host-specific paths, would break inside the image
 .venv
+
+# Version control & docs
 .git
+.gitignore
+CLAUDE.md
+
+# Python build noise
 __pycache__/
 *.py[oc]
 *.egg-info
 build/
 dist/
 wheels/
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Secrets — never bake these into an image
+.env
+*.env
+
+# Docker's own files aren't needed inside the image
 Dockerfile
 .dockerignore

@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Flask instance folder — local db, local secrets
+instance/
