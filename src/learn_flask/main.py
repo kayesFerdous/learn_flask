@@ -1,4 +1,6 @@
-from flask import Flask, jsonify, request
+from flask import Flask, request
+from flask.views import MethodView
+from flask_smorest import Api, Blueprint, abort
 
 stores = {
     1: [
@@ -17,13 +19,21 @@ stores = {
     ],
 }
 
-app = Flask(__name__)
-
 NUMERIC_KEYS = ["price"]
 
 
-def find_item(store_id, item_name):
-    return next((i for i in stores[store_id] if i["name"] == item_name), None)
+def get_store_or_404(store_id):
+    if store_id not in stores:
+        abort(404, message=f"Store {store_id} not found.")
+    return stores[store_id]
+
+
+def get_item_or_404(store_id, item_name):
+    store = get_store_or_404(store_id)
+    item = next((i for i in store if i["name"] == item_name), None)
+    if item is None:
+        abort(404, message=f"Item '{item_name}' not found in store {store_id}.")
+    return item
 
 
 def to_numbers(data):
@@ -33,118 +43,103 @@ def to_numbers(data):
     return data
 
 
-@app.get("/")
-def index():
-    return jsonify({"message": "Store API", "stores": len(stores)})
+store_blp = Blueprint(
+    "Stores", "stores", url_prefix="/stores", description="Operations on stores"
+)
+
+item_blp = Blueprint(
+    "Items", "items", url_prefix="/stores", description="Operations on items in a store"
+)
 
 
-@app.get("/stores")
-def list_stores():
-    return jsonify(stores)
+@store_blp.route("/")
+class StoreList(MethodView):
+    def get(self):
+        return stores
+
+    def post(self):
+        store_id = max(stores) + 1 if stores else 1
+        stores[store_id] = []
+        return {"id": store_id, "items": []}, 201
 
 
-@app.post("/stores")
-def create_store():
-    new_id = max(stores) + 1 if stores else 1
-    stores[new_id] = []
-    return jsonify({"id": new_id, "items": []}), 201
+@store_blp.route("/<int:store_id>")
+class Store(MethodView):
+    def get(self, store_id):
+        return {"id": store_id, "items": get_store_or_404(store_id)}
+
+    def delete(self, store_id):
+        get_store_or_404(store_id)
+        del stores[store_id]
+        return {"message": f"Store {store_id} deleted."}
 
 
-@app.get("/stores/<int:store_id>")
-def get_store(store_id):
-    if store_id not in stores:
-        return jsonify({"error": f"store {store_id} not found"}), 404
+@item_blp.route("/<int:store_id>/items")
+class ItemList(MethodView):
+    def get(self, store_id):
+        store = get_store_or_404(store_id)
+        filters = to_numbers(request.args.to_dict())
 
-    return jsonify({"id": store_id, "items": stores[store_id]})
+        return [
+            item
+            for item in store
+            if all(item.get(key) == value for key, value in filters.items())
+        ]
 
+    def post(self, store_id):
+        store = get_store_or_404(store_id)
 
-@app.delete("/stores/<int:store_id>")
-def delete_store(store_id):
-    if store_id not in stores:
-        return jsonify({"error": f"store {store_id} not found"}), 404
+        data = request.get_json(silent=True)
+        if data is None:
+            abort(400, message="Request body must be JSON.")
 
-    del stores[store_id]
-    return jsonify({"message": f"store {store_id} deleted"})
+        missing = [key for key in ("name", "price") if key not in data]
+        if missing:
+            abort(400, message=f"Missing fields: {', '.join(missing)}.")
 
+        if any(i["name"] == data["name"] for i in store):
+            abort(409, message=f"Item '{data['name']}' already exists in this store.")
 
-@app.get("/stores/<int:store_id>/items")
-def list_items(store_id):
-    if store_id not in stores:
-        return jsonify({"error": f"store {store_id} not found"}), 404
-
-    filters = to_numbers(request.args.to_dict())
-
-    matched = [
-        i
-        for i in stores[store_id]
-        if all(i.get(key) == value for key, value in filters.items())
-    ]
-
-    return jsonify(matched)
+        item = to_numbers({"name": data["name"], "price": data["price"]})
+        store.append(item)
+        return item, 201
 
 
-@app.post("/stores/<int:store_id>/items")
-def create_item(store_id):
-    if store_id not in stores:
-        return jsonify({"error": f"store {store_id} not found"}), 404
+@item_blp.route("/<int:store_id>/items/<item_name>")
+class Item(MethodView):
+    def get(self, store_id, item_name):
+        return get_item_or_404(store_id, item_name)
 
-    data = request.get_json(silent=True)
-    if data is None:
-        return jsonify({"error": "body must be JSON"}), 400
+    def patch(self, store_id, item_name):
+        item = get_item_or_404(store_id, item_name)
 
-    missing = [key for key in ("name", "price") if key not in data]
-    if missing:
-        return jsonify({"error": f"missing fields: {', '.join(missing)}"}), 400
+        data = request.get_json(silent=True)
+        if data is None:
+            abort(400, message="Request body must be JSON.")
 
-    if find_item(store_id, data["name"]):
-        return jsonify({"error": f"item '{data['name']}' already exists"}), 409
+        item.update(to_numbers(data))
+        return item
 
-    item = to_numbers({"name": data["name"], "price": data["price"]})
-    stores[store_id].append(item)
-
-    return jsonify(item), 201
-
-
-@app.get("/stores/<int:store_id>/items/<item_name>")
-def get_item(store_id, item_name):
-    if store_id not in stores:
-        return jsonify({"error": f"store {store_id} not found"}), 404
-
-    item = find_item(store_id, item_name)
-    if item is None:
-        return jsonify({"error": f"item '{item_name}' not found"}), 404
-
-    return jsonify(item)
+    def delete(self, store_id, item_name):
+        item = get_item_or_404(store_id, item_name)
+        stores[store_id].remove(item)
+        return {"message": f"Item '{item_name}' deleted."}
 
 
-@app.patch("/stores/<int:store_id>/items/<item_name>")
-def update_item(store_id, item_name):
-    if store_id not in stores:
-        return jsonify({"error": f"store {store_id} not found"}), 404
+app = Flask(__name__)
 
-    item = find_item(store_id, item_name)
-    if item is None:
-        return jsonify({"error": f"item '{item_name}' not found"}), 404
+app.config["API_TITLE"] = "Store API"
+app.config["API_VERSION"] = "v1"
+app.config["OPENAPI_VERSION"] = "3.1.0"
+app.config["OPENAPI_URL_PREFIX"] = "/"
+app.config["OPENAPI_JSON_PATH"] = "openapi.json"
+app.config["OPENAPI_SWAGGER_UI_PATH"] = "/docs"
+app.config["OPENAPI_SWAGGER_UI_URL"] = "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
+app.config["PROPAGATE_EXCEPTIONS"] = True
 
-    data = request.get_json(silent=True)
-    if data is None:
-        return jsonify({"error": "body must be JSON"}), 400
-
-    item.update(to_numbers(data))
-    return jsonify(item)
-
-
-@app.delete("/stores/<int:store_id>/items/<item_name>")
-def delete_item(store_id, item_name):
-    if store_id not in stores:
-        return jsonify({"error": f"store {store_id} not found"}), 404
-
-    item = find_item(store_id, item_name)
-    if item is None:
-        return jsonify({"error": f"item '{item_name}' not found"}), 404
-
-    stores[store_id].remove(item)
-    return jsonify({"message": f"item '{item_name}' deleted"})
+api = Api(app)
+api.register_blueprint(store_blp)
+api.register_blueprint(item_blp)
 
 
 def main():
