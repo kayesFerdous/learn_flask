@@ -1,9 +1,23 @@
-import uuid
+from uuid import UUID, uuid4
+import os
 
 from flask import Flask
 from flask.views import MethodView
 from flask_smorest import Api, Blueprint, abort
 from marshmallow import Schema, fields
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import Mapped, mapped_column
+
+
+db = SQLAlchemy()
+
+
+class ItemModel(db.Model):
+    __tablename__ = "items"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(nullable=False)
+    price: Mapped[float] = mapped_column(nullable=False)
 
 
 class ItemSchema(Schema):
@@ -144,7 +158,7 @@ class ItemList(MethodView):
     def post(self, item_data, store_id):
         store = get_store_or_404(store_id)
 
-        item = {**item_data, "id": str(uuid.uuid4())}
+        item = {**item_data, "id": str(uuid4())}
         store.append(item)
         return item
 
@@ -169,21 +183,38 @@ class Item(MethodView):
         return {"message": f"Item '{item_id}' deleted."}
 
 
-app = Flask(__name__)
+def create_app(db_url=None):
 
-app.config["API_TITLE"] = "Store API"
-app.config["API_VERSION"] = "v1"
-app.config["OPENAPI_VERSION"] = "3.1.0"
-app.config["OPENAPI_URL_PREFIX"] = "/"
-app.config["OPENAPI_JSON_PATH"] = "openapi.json"
-app.config["OPENAPI_SWAGGER_UI_PATH"] = "/docs"
-app.config["OPENAPI_SWAGGER_UI_URL"] = "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
-app.config["PROPAGATE_EXCEPTIONS"] = True
+    app = Flask(__name__)
 
-api = Api(app)
-api.register_blueprint(store_blp)
-api.register_blueprint(item_blp)
+    app.config["API_TITLE"] = "Store API"
+    app.config["API_VERSION"] = "v1"
+    app.config["OPENAPI_VERSION"] = "3.1.0"
+    app.config["OPENAPI_URL_PREFIX"] = "/"
+    app.config["OPENAPI_JSON_PATH"] = "openapi.json"
+    app.config["OPENAPI_SWAGGER_UI_PATH"] = "/docs"
+    app.config["OPENAPI_SWAGGER_UI_URL"] = (
+        "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
+    )
+    app.config["PROPAGATE_EXCEPTIONS"] = True
+    app.config["SQLALCHEMY_DATABASE_URI"] = db_url or os.getenv(
+        "DATABASE_URL", "sqlite:///data.db"
+    )
+
+    db.init_app(app)
+
+    api = Api(app)
+
+    @app.before_request
+    def create_table():
+        db.create_all()
+
+    api.register_blueprint(store_blp)
+    api.register_blueprint(item_blp)
+
+    return app
 
 
 def main():
+    app = create_app()
     app.run(host="0.0.0.0", port=3000, debug=True)
