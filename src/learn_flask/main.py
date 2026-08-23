@@ -1,25 +1,36 @@
 from flask import Flask, request
 from flask.views import MethodView
 from flask_smorest import Api, Blueprint, abort
+from marshmallow import Schema, fields
+
+
+class ItemSchema(Schema):
+    id = fields.Integer(dump_only=True)
+    name = fields.Str(required=True)
+    price = fields.Float(required=True)
+
 
 stores = {
     1: [
-        {"name": "Wireless Mouse", "price": 850},
-        {"name": "Mechanical Keyboard", "price": 3200},
-        {"name": "Webcam", "price": 2500},
+        {"id": 1, "name": "Wireless Mouse", "price": 850},
+        {"id": 2, "name": "Mechanical Keyboard", "price": 3200},
+        {"id": 3, "name": "Webcam", "price": 2500},
     ],
     2: [
-        {"name": "USB-C Cable", "price": 450},
-        {"name": "Laptop Stand", "price": 1500},
-        {"name": "Power Bank", "price": 1800},
+        {"id": 4, "name": "USB-C Cable", "price": 450},
+        {"id": 5, "name": "Laptop Stand", "price": 1500},
+        {"id": 6, "name": "Power Bank", "price": 1800},
     ],
     3: [
-        {"name": "Bluetooth Speaker", "price": 2800},
-        {"name": "Gaming Headset", "price": 4200},
+        {"id": 7, "name": "Bluetooth Speaker", "price": 2800},
+        {"id": 8, "name": "Gaming Headset", "price": 4200},
     ],
 }
 
-NUMERIC_KEYS = ["price"]
+# Counter, not max()+1 -- an id is never reused after its item is deleted.
+next_item_id = 9
+
+NUMERIC_KEYS = ["id", "price"]
 
 
 def get_store_or_404(store_id):
@@ -28,11 +39,11 @@ def get_store_or_404(store_id):
     return stores[store_id]
 
 
-def get_item_or_404(store_id, item_name):
+def get_item_or_404(store_id, item_id):
     store = get_store_or_404(store_id)
-    item = next((i for i in store if i["name"] == item_name), None)
+    item = next((i for i in store if i["id"] == item_id), None)
     if item is None:
-        abort(404, message=f"Item '{item_name}' not found in store {store_id}.")
+        abort(404, message=f"Item {item_id} not found in store {store_id}.")
     return item
 
 
@@ -97,33 +108,37 @@ class ItemList(MethodView):
         if missing:
             abort(400, message=f"Missing fields: {', '.join(missing)}.")
 
-        if any(i["name"] == data["name"] for i in store):
-            abort(409, message=f"Item '{data['name']}' already exists in this store.")
-
+        global next_item_id
         item = to_numbers({"name": data["name"], "price": data["price"]})
+        item["id"] = next_item_id
+        next_item_id += 1
+
         store.append(item)
         return item, 201
 
 
-@item_blp.route("/<int:store_id>/items/<item_name>")
+@item_blp.route("/<int:store_id>/items/<int:item_id>")
 class Item(MethodView):
-    def get(self, store_id, item_name):
-        return get_item_or_404(store_id, item_name)
+    def get(self, store_id, item_id):
+        return get_item_or_404(store_id, item_id)
 
-    def patch(self, store_id, item_name):
-        item = get_item_or_404(store_id, item_name)
+    def patch(self, store_id, item_id):
+        item = get_item_or_404(store_id, item_id)
 
         data = request.get_json(silent=True)
         if data is None:
             abort(400, message="Request body must be JSON.")
 
+        # The id identifies the item; a client must not be able to change it.
+        data.pop("id", None)
+
         item.update(to_numbers(data))
         return item
 
-    def delete(self, store_id, item_name):
-        item = get_item_or_404(store_id, item_name)
+    def delete(self, store_id, item_id):
+        item = get_item_or_404(store_id, item_id)
         stores[store_id].remove(item)
-        return {"message": f"Item '{item_name}' deleted."}
+        return {"message": f"Item {item_id} deleted."}
 
 
 app = Flask(__name__)
