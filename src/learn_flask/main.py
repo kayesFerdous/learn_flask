@@ -1,9 +1,34 @@
 import uuid
 
-from flask import Flask, request
+from flask import Flask
 from flask.views import MethodView
 from flask_smorest import Api, Blueprint, abort
-# from marshmallow import Schema, fields
+from marshmallow import Schema, fields
+
+
+class ItemSchema(Schema):
+    id = fields.Str(dump_only=True)
+    name = fields.Str(required=True)
+    price = fields.Float(required=True)
+
+
+class ItemUpdateSchema(Schema):
+    name = fields.Str()
+    price = fields.Float()
+
+
+class ItemQuerySchema(Schema):
+    name = fields.Str()
+    price = fields.Float()
+
+
+class StoreSchema(Schema):
+    id = fields.Int(dump_only=True)
+    items = fields.List(fields.Nested(ItemSchema), dump_only=True)
+
+
+class MessageSchema(Schema):
+    message = fields.Str()
 
 
 stores = {
@@ -51,8 +76,6 @@ stores = {
     ],
 }
 
-NUMERIC_KEYS = ["price"]
-
 
 def get_store_or_404(store_id):
     if store_id not in stores:
@@ -68,13 +91,6 @@ def get_item_or_404(store_id, item_id):
     return item
 
 
-def to_numbers(data):
-    for key in NUMERIC_KEYS:
-        if key in data:
-            data[key] = int(data[key])
-    return data
-
-
 store_blp = Blueprint(
     "Stores", "stores", url_prefix="/stores", description="Operations on stores"
 )
@@ -86,20 +102,24 @@ item_blp = Blueprint(
 
 @store_blp.route("/")
 class StoreList(MethodView):
+    @store_blp.response(200, StoreSchema(many=True))
     def get(self):
-        return stores
+        return [{"id": store_id, "items": items} for store_id, items in stores.items()]
 
+    @store_blp.response(201, StoreSchema)
     def post(self):
         store_id = max(stores) + 1 if stores else 1
         stores[store_id] = []
-        return {"id": store_id, "items": []}, 201
+        return {"id": store_id, "items": []}
 
 
 @store_blp.route("/<int:store_id>")
 class Store(MethodView):
+    @store_blp.response(200, StoreSchema)
     def get(self, store_id):
         return {"id": store_id, "items": get_store_or_404(store_id)}
 
+    @store_blp.response(200, MessageSchema)
     def delete(self, store_id):
         get_store_or_404(store_id)
         del stores[store_id]
@@ -108,9 +128,10 @@ class Store(MethodView):
 
 @item_blp.route("/<int:store_id>/items")
 class ItemList(MethodView):
-    def get(self, store_id):
+    @item_blp.arguments(ItemQuerySchema, location="query")
+    @item_blp.response(200, ItemSchema(many=True))
+    def get(self, filters, store_id):
         store = get_store_or_404(store_id)
-        filters = to_numbers(request.args.to_dict())
 
         return [
             item
@@ -118,42 +139,30 @@ class ItemList(MethodView):
             if all(item.get(key) == value for key, value in filters.items())
         ]
 
-    def post(self, store_id):
+    @item_blp.arguments(ItemSchema)
+    @item_blp.response(201, ItemSchema)
+    def post(self, item_data, store_id):
         store = get_store_or_404(store_id)
 
-        data = request.get_json(silent=True)
-        if data is None:
-            abort(400, message="Request body must be JSON.")
-
-        missing = [key for key in ("name", "price") if key not in data]
-        if missing:
-            abort(400, message=f"Missing fields: {', '.join(missing)}.")
-
-        item = to_numbers({"name": data["name"], "price": data["price"]})
-        item["id"] = str(uuid.uuid4())
-
+        item = {**item_data, "id": str(uuid.uuid4())}
         store.append(item)
-        return item, 201
+        return item
 
 
 @item_blp.route("/<int:store_id>/items/<item_id>")
 class Item(MethodView):
+    @item_blp.response(200, ItemSchema)
     def get(self, store_id, item_id):
         return get_item_or_404(store_id, item_id)
 
-    def patch(self, store_id, item_id):
+    @item_blp.arguments(ItemUpdateSchema)
+    @item_blp.response(200, ItemSchema)
+    def patch(self, item_data, store_id, item_id):
         item = get_item_or_404(store_id, item_id)
-
-        data = request.get_json(silent=True)
-        if data is None:
-            abort(400, message="Request body must be JSON.")
-
-        # The id identifies the item; a client must not be able to change it.
-        data.pop("id", None)
-
-        item.update(to_numbers(data))
+        item.update(item_data)
         return item
 
+    @item_blp.response(200, MessageSchema)
     def delete(self, store_id, item_id):
         item = get_item_or_404(store_id, item_id)
         stores[store_id].remove(item)
