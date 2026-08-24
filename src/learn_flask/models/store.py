@@ -1,10 +1,10 @@
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from learn_flask.extensions import db
+from sqlalchemy.orm import DynamicMapped, Mapped, mapped_column, relationship
+from learn_flask.extensions import Base
 
-class StoreModel(db.Model):
+class StoreModel(Base):
     __tablename__ = "stores"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(nullable=False)
+    name: Mapped[str] = mapped_column(nullable=False, unique=True)
 
-    items: Mapped[list["ItemModel"]] = relationship(back_populates="store", cascade="all, delete-orphan", lazy="dynamic") #type: ignore[name-defined]
+    items: DynamicMapped["ItemModel"] = relationship(back_populates="store", cascade="all, delete-orphan", lazy="dynamic") #type: ignore[name-defined]
