@@ -1,8 +1,11 @@
-from uuid import uuid4
+from flask import abort
 from flask.views import MethodView
 from flask_smorest import Blueprint
+from sqlalchemy.exc import SQLAlchemyError
 
+from learn_flask.extensions import db
 from learn_flask.blueprints import get_item_or_404, get_store_or_404, stores
+from learn_flask.models.item import ItemModel
 from learn_flask.schemas import ItemQuerySchema, ItemSchema, ItemUpdateSchema, MessageSchema
 
 
@@ -26,12 +29,16 @@ class ItemList(MethodView):
     @item_blp.arguments(ItemSchema)
     @item_blp.response(201, ItemSchema)
     def post(self, item_data, store_id):
-        store = get_store_or_404(store_id)
+        item = ItemModel(**item_data)
+        try:
+            db.session.add(item)
+            db.session.commit()
+        except SQLAlchemyError:
+            abort(500, message="An error occurred while inserting the item.")
 
-        item = {**item_data, "id": str(uuid4())}
-        store.append(item)
         return item
 
+    
 
 @item_blp.route("/<int:store_id>/items/<item_id>")
 class Item(MethodView):

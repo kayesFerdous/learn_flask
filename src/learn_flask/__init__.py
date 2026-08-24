@@ -2,6 +2,7 @@ import os
 from flask import Flask
 from flask_smorest import Api
 
+import learn_flask.models
 from learn_flask.extensions import db
 from learn_flask.blueprints.store import store_blp
 from learn_flask.blueprints.item import item_blp
