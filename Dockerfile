@@ -21,4 +21,4 @@ ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 3000
 
 # Gunicorn, not app.run() — that one is Flask's development server.
-CMD ["gunicorn", "--bind", "0.0.0.0:3000", "learn_flask.main:create_app()"]
+CMD ["gunicorn", "--bind", "0.0.0.0:3000", "learn_flask:create_app()"]
