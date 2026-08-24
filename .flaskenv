@@ -1,3 +1,3 @@
-FLASK_APP=learn_flask.main
+FLASK_APP=learn_flask
 FLASK_DEBUG=1
 FLASK_RUN_PORT=3000
