@@ -16,3 +16,4 @@ class UserLoginSchema(Schema):
 
 class TokenSchema(Schema):
     access_token = fields.Str(dump_only=True)
+    refresh_token = fields.Str(dump_only=True)

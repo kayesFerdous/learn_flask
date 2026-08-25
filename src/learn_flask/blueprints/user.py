@@ -1,7 +1,13 @@
 from datetime import datetime, timezone
 
 from flask.views import MethodView
-from flask_jwt_extended import create_access_token, get_jwt, jwt_required
+from flask_jwt_extended import (
+    create_access_token,
+    create_refresh_token,
+    get_jwt,
+    get_jwt_identity,
+    jwt_required,
+)
 from flask_smorest import Blueprint, abort
 from passlib.hash import pbkdf2_sha256
 from sqlalchemy.exc import IntegrityError
@@ -19,6 +25,25 @@ from learn_flask.schemas import (
 user_blp = Blueprint(
     "Users", "users", url_prefix="/users", description="Registration and login"
 )
+
+
+def revoke(token):
+    """Block this token's jti, and drop rows for tokens that already expired."""
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # Rows for tokens that have already expired can never block anything,
+    # so drop them here instead of running a separate cleanup job.
+    db.session.execute(
+        db.delete(TokenBlocklistModel).where(TokenBlocklistModel.expires_at < now)
+    )
+    db.session.add(
+        TokenBlocklistModel(
+            jti=token["jti"],
+            expires_at=datetime.fromtimestamp(token["exp"], tz=timezone.utc).replace(
+                tzinfo=None
+            ),
+        )
+    )
 
 
 @user_blp.route("/")
@@ -59,7 +84,10 @@ class UserLogin(MethodView):
         ):
             abort(401, message="Invalid username or password.")
 
-        return {"access_token": create_access_token(identity=str(user.id))}
+        return {
+            "access_token": create_access_token(identity=str(user.id), fresh=True),
+            "refresh_token": create_refresh_token(identity=str(user.id)),
+        }
 
 
 @user_blp.route("/<uuid:user_id>")
@@ -70,7 +98,7 @@ class User(MethodView):
     def get(self, user_id):
         return get_user_or_404(user_id)
 
-    @jwt_required()
+    @jwt_required(fresh=True)
     @user_blp.doc(security=[{"bearerAuth": []}])
     @user_blp.response(200, MessageSchema)
     def delete(self, user_id):
@@ -82,25 +110,30 @@ class User(MethodView):
 
 @user_blp.route("/logout")
 class UserLogout(MethodView):
-    @jwt_required()
+    @jwt_required(verify_type=False)
     @user_blp.doc(security=[{"bearerAuth": []}])
     @user_blp.response(200, MessageSchema)
     def post(self):
         token = get_jwt()
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-
-        # Rows for tokens that have already expired can never block anything,
-        # so drop them here instead of running a separate cleanup job.
-        db.session.execute(
-            db.delete(TokenBlocklistModel).where(TokenBlocklistModel.expires_at < now)
-        )
-        db.session.add(
-            TokenBlocklistModel(
-                jti=token["jti"],
-                expires_at=datetime.fromtimestamp(
-                    token["exp"], tz=timezone.utc
-                ).replace(tzinfo=None),
-            )
-        )
+        revoke(token)
         db.session.commit()
-        return {"message": "Successfully logged out."}
+        return {"message": f"Successfully revoked the {token['type']} token."}
+
+
+@user_blp.route("/refresh")
+class TokenRefresh(MethodView):
+    @jwt_required(refresh=True)
+    @user_blp.doc(security=[{"bearerAuth": []}])
+    @user_blp.response(200, TokenSchema)
+    def post(self):
+        identity = get_jwt_identity()
+
+        # Rotation: the refresh token just used is retired and replaced, so a
+        # stolen one stops working as soon as the real user refreshes.
+        revoke(get_jwt())
+        db.session.commit()
+
+        return {
+            "access_token": create_access_token(identity=identity, fresh=False),
+            "refresh_token": create_refresh_token(identity=identity),
+        }

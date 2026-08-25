@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 from flask import Flask
 from flask_jwt_extended import JWTManager
@@ -46,6 +47,8 @@ def create_app():
     app.config["JWT_SECRET_KEY"] = os.getenv(
         "JWT_SECRET_KEY", "dev-only-secret-not-for-production-use-32b"
     )
+    app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=15)
+    app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=30)
 
     db.init_app(app)
 
@@ -59,6 +62,10 @@ def create_app():
     @jwt.revoked_token_loader
     def revoked_token(jwt_header, jwt_payload):
         return {"message": "This token has been revoked. Please log in again."}, 401
+
+    @jwt.needs_fresh_token_loader
+    def needs_fresh_token(jwt_header, jwt_payload):
+        return {"message": "This action needs a fresh token. Please log in again."}, 401
 
     api = Api(app)
 
