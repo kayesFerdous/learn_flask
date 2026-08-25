@@ -1,7 +1,7 @@
 from flask_smorest import abort
 
 from learn_flask.extensions import db
-from learn_flask.models import ItemModel, StoreModel, TagModel
+from learn_flask.models import ItemModel, StoreModel, TagModel, UserModel
 
 
 def get_store_or_404(store_id):
@@ -26,3 +26,9 @@ def get_tag_or_404(tag_id, store_id=None):
         abort(404, message=f"Tag '{tag_id}' not found{where}.")
     return tag
 
+
+def get_user_or_404(user_id):
+    user = db.session.get(UserModel, user_id)
+    if user is None:
+        abort(404, message=f"User {user_id} not found.")
+    return user
