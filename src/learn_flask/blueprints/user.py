@@ -1,12 +1,14 @@
+from datetime import datetime, timezone
+
 from flask.views import MethodView
-from flask_jwt_extended import create_access_token, jwt_required
+from flask_jwt_extended import create_access_token, get_jwt, jwt_required
 from flask_smorest import Blueprint, abort
 from passlib.hash import pbkdf2_sha256
 from sqlalchemy.exc import IntegrityError
 
 from learn_flask.blueprints import get_user_or_404
 from learn_flask.extensions import db
-from learn_flask.models import UserModel
+from learn_flask.models import TokenBlocklistModel, UserModel
 from learn_flask.schemas import (
     MessageSchema,
     TokenSchema,
@@ -76,3 +78,29 @@ class User(MethodView):
         db.session.delete(user)
         db.session.commit()
         return {"message": f"User {user_id} deleted."}
+
+
+@user_blp.route("/logout")
+class UserLogout(MethodView):
+    @jwt_required()
+    @user_blp.doc(security=[{"bearerAuth": []}])
+    @user_blp.response(200, MessageSchema)
+    def post(self):
+        token = get_jwt()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        # Rows for tokens that have already expired can never block anything,
+        # so drop them here instead of running a separate cleanup job.
+        db.session.execute(
+            db.delete(TokenBlocklistModel).where(TokenBlocklistModel.expires_at < now)
+        )
+        db.session.add(
+            TokenBlocklistModel(
+                jti=token["jti"],
+                expires_at=datetime.fromtimestamp(
+                    token["exp"], tz=timezone.utc
+                ).replace(tzinfo=None),
+            )
+        )
+        db.session.commit()
+        return {"message": "Successfully logged out."}

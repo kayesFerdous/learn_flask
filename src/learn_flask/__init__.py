@@ -9,6 +9,7 @@ from learn_flask.blueprints.store import store_blp
 from learn_flask.blueprints.tag import tag_blp
 from learn_flask.blueprints.user import user_blp
 from learn_flask.extensions import db
+from learn_flask.models import TokenBlocklistModel
 
 
 def create_app():
@@ -47,7 +48,17 @@ def create_app():
     )
 
     db.init_app(app)
-    JWTManager(app)
+
+    jwt = JWTManager(app)
+
+    @jwt.token_in_blocklist_loader
+    def is_token_revoked(jwt_header, jwt_payload):
+        # Runs on every @jwt_required() request. True means "reject this token".
+        return db.session.get(TokenBlocklistModel, jwt_payload["jti"]) is not None
+
+    @jwt.revoked_token_loader
+    def revoked_token(jwt_header, jwt_payload):
+        return {"message": "This token has been revoked. Please log in again."}, 401
 
     api = Api(app)
 
