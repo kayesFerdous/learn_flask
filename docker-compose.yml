@@ -17,6 +17,12 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql
 
+    # Loopback only. A bare "5432:5432" would expose Postgres to your whole
+    # network. This lets the flask CLI (and psql, or a GUI client) on your Mac
+    # reach it, and nothing else.
+    ports:
+      - "127.0.0.1:5432:5432"
+
     # depends_on alone only waits for the container to START. Postgres needs a
     # few more seconds before it accepts connections, and the app runs
     # `flask db upgrade` immediately — so it would crash. This healthcheck is
@@ -42,6 +48,13 @@ services:
     # Reads .env at RUN time (not build time) and passes it into the container.
     env_file:
       - .env
+
+    # `environment:` wins over `env_file:`. .env points DATABASE_URL at
+    # localhost so the flask CLI on the host works; inside the network Postgres
+    # is reachable as `db` instead, so it gets overridden here. One .env, two
+    # correct addresses, nothing to remember.
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
 
     # Don't start until Postgres reports healthy above.
     depends_on:

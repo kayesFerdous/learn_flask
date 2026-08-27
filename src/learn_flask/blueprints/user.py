@@ -46,6 +46,16 @@ def revoke(token):
     )
 
 
+def reject_if_taken(name, email):
+    if db.session.scalar(db.select(UserModel).where(UserModel.name == name)):
+        abort(
+            400,
+            message=f"The username '{name}' already exists. Please pick another one.",
+        )
+    if db.session.scalar(db.select(UserModel).where(UserModel.email == email)):
+        abort(400, message=f"An account with the email '{email}' already exists.")
+
+
 @user_blp.route("/")
 class UserList(MethodView):
     @jwt_required()
@@ -57,8 +67,11 @@ class UserList(MethodView):
     @user_blp.arguments(UserSchema)
     @user_blp.response(201, UserSchema)
     def post(self, user_data):
+        reject_if_taken(user_data["name"], user_data["email"])
+
         user = UserModel(
             name=user_data["name"],
+            email=user_data["email"],
             password_hash=pbkdf2_sha256.hash(user_data["password"]),
         )
         try:
@@ -66,7 +79,10 @@ class UserList(MethodView):
             db.session.commit()
         except IntegrityError:
             db.session.rollback()
-            abort(400, message="A user with this name already exists.")
+            # Two signups can clear the check above at the same moment and only
+            # one can win. Re-checking finds whichever row got there first.
+            reject_if_taken(user_data["name"], user_data["email"])
+            raise
 
         return user
 
@@ -77,12 +93,12 @@ class UserLogin(MethodView):
     @user_blp.response(200, TokenSchema)
     def post(self, user_data):
         user = db.session.scalar(
-            db.select(UserModel).where(UserModel.name == user_data["name"])
+            db.select(UserModel).where(UserModel.email == user_data["email"])
         )
         if user is None or not pbkdf2_sha256.verify(
             user_data["password"], user.password_hash
         ):
-            abort(401, message="Invalid username or password.")
+            abort(401, message="Invalid email or password.")
 
         return {
             "access_token": create_access_token(identity=str(user.id), fresh=True),
