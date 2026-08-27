@@ -1,4 +1,35 @@
 services:
+  db:
+    image: postgres:18-alpine
+
+    container_name: learn-flask-db
+
+    # Postgres creates this user/database the first time the volume is empty.
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+    # Named volume: the data lives outside the container, so `docker compose
+    # down` and rebuilds don't wipe your rows. Only `down -v` deletes it.
+    # Postgres 18+ wants the mount at /var/lib/postgresql, NOT the older
+    # /var/lib/postgresql/data — the image refuses to start otherwise.
+    volumes:
+      - pgdata:/var/lib/postgresql
+
+    # depends_on alone only waits for the container to START. Postgres needs a
+    # few more seconds before it accepts connections, and the app runs
+    # `flask db upgrade` immediately — so it would crash. This healthcheck is
+    # what makes "wait for the db" actually mean it.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+
+    restart: unless-stopped
+
   api:
     build: .
     image: learn-flask:1.0
@@ -8,4 +39,16 @@ services:
     ports:
       - "3000:3000"
 
+    # Reads .env at RUN time (not build time) and passes it into the container.
+    env_file:
+      - .env
+
+    # Don't start until Postgres reports healthy above.
+    depends_on:
+      db:
+        condition: service_healthy
+
     restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -11,3 +11,6 @@ wheels/
 
 # Flask instance folder — local db, local secrets
 instance/
+
+# Secrets — local credentials, never commit
+.env
