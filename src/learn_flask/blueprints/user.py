@@ -13,6 +13,7 @@ from passlib.hash import pbkdf2_sha256
 from sqlalchemy.exc import IntegrityError
 
 from learn_flask.blueprints import get_user_or_404
+from learn_flask.email import send_welcome_email
 from learn_flask.extensions import db
 from learn_flask.models import TokenBlocklistModel, UserModel
 from learn_flask.schemas import (
@@ -83,6 +84,8 @@ class UserList(MethodView):
             # one can win. Re-checking finds whichever row got there first.
             reject_if_taken(user_data["name"], user_data["email"])
             raise
+
+        send_welcome_email(user)
 
         return user
 

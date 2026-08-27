@@ -54,6 +54,10 @@ def create_app():
         "pool_recycle": 300,
     }
 
+    app.config["BREVO_API_KEY"] = os.getenv("BREVO_API_KEY")
+    app.config["MAIL_FROM_EMAIL"] = os.getenv("MAIL_FROM_EMAIL", "")
+    app.config["MAIL_FROM_NAME"] = os.getenv("MAIL_FROM_NAME", "Store API")
+
     # Dev-only fallback. In production JWT_SECRET_KEY must come from the
     # environment -- anyone who knows it can forge a token for any user.
     app.config["JWT_SECRET_KEY"] = os.getenv(
