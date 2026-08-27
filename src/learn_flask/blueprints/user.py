@@ -13,7 +13,7 @@ from passlib.hash import pbkdf2_sha256
 from sqlalchemy.exc import IntegrityError
 
 from learn_flask.blueprints import get_user_or_404
-from learn_flask.email import send_welcome_email
+from learn_flask.email import enqueue_welcome_email
 from learn_flask.extensions import db
 from learn_flask.models import TokenBlocklistModel, UserModel
 from learn_flask.schemas import (
@@ -85,7 +85,9 @@ class UserList(MethodView):
             reject_if_taken(user_data["name"], user_data["email"])
             raise
 
-        send_welcome_email(user)
+        # Only drops a job into Redis, so the response does not wait on Brevo.
+        # With no Redis configured it falls back to sending inline.
+        enqueue_welcome_email(user.name, user.email)
 
         return user
 

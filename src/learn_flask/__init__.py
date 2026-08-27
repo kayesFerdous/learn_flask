@@ -1,10 +1,12 @@
 import os
 from datetime import timedelta
 
+import redis
 from flask import Flask
 from flask_jwt_extended import JWTManager
 from flask_migrate import Migrate
 from flask_smorest import Api
+from rq import Queue
 
 from learn_flask.blueprints.item import item_blp
 from learn_flask.blueprints.store import store_blp
@@ -17,6 +19,18 @@ from learn_flask.models import TokenBlocklistModel
 def create_app():
 
     app = Flask(__name__)
+
+    # Only build a queue if Redis is actually configured. Without this guard
+    # redis.from_url(None) blows up and takes the whole app with it -- and
+    # local dev / tests have no Redis. tasks.py falls back to sending inline.
+    #
+    # app.extensions is Flask's standard place for this; assigning app.queue
+    # directly risks colliding with a future Flask attribute.
+    redis_url = os.getenv("REDIS_URL")
+    if redis_url:
+        app.extensions["rq_queue"] = Queue(
+            "email", connection=redis.from_url(redis_url)
+        )
 
     app.config["API_TITLE"] = "Store API"
     app.config["API_VERSION"] = "v1"
@@ -53,10 +67,6 @@ def create_app():
         "pool_pre_ping": True,
         "pool_recycle": 300,
     }
-
-    app.config["BREVO_API_KEY"] = os.getenv("BREVO_API_KEY")
-    app.config["MAIL_FROM_EMAIL"] = os.getenv("MAIL_FROM_EMAIL", "")
-    app.config["MAIL_FROM_NAME"] = os.getenv("MAIL_FROM_NAME", "Store API")
 
     # Dev-only fallback. In production JWT_SECRET_KEY must come from the
     # environment -- anyone who knows it can forge a token for any user.

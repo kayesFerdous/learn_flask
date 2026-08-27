@@ -36,6 +36,24 @@ services:
 
     restart: unless-stopped
 
+  redis:
+    image: redis:8-alpine
+
+    container_name: learn-flask-redis
+
+    # Queued jobs live here. The volume means a job survives a restart of this
+    # container instead of being silently dropped.
+    volumes:
+      - redisdata:/data
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+    restart: unless-stopped
+
   api:
     build: .
     image: learn-flask:1.0
@@ -55,13 +73,38 @@ services:
     # correct addresses, nothing to remember.
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
 
     # Don't start until Postgres reports healthy above.
     depends_on:
       db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+  worker:
+    # Same image as api, but instead of gunicorn it runs rq's own worker
+    # command. No worker script of ours -- `rq worker` imports the job
+    # function straight from learn_flask.email when a job arrives.
+    build: .
+    image: learn-flask:1.0
+
+    container_name: learn-flask-worker
+
+    command: ["rq", "worker", "--url", "redis://redis:6379/0", "email"]
+
+    # Only the Brevo settings; the job never touches the database.
+    env_file:
+      - .env
+
+    depends_on:
+      redis:
         condition: service_healthy
 
     restart: unless-stopped
 
 volumes:
   pgdata:
+  redisdata:
