@@ -22,6 +22,16 @@ A learning project. I'm new to Flask, and to Python packaging/imports in general
 - If I sound confused or overwhelmed, stop adding information. Cut the scope down
   and re-explain the single thing I'm actually stuck on.
 
+## Don't edit my code unless I ask
+
+- **Explain first, then stop.** Show me the cause and show me the fix, but don't
+  apply it. Wait until I say go.
+- This includes "obvious" one-line fixes. I'm learning, and I learn by making the
+  change myself.
+- Investigating is always fine — read files, grep, run commands, run the app,
+  reproduce the error. It's *writing to files* I want you to hold off on.
+- If you think a change is urgent, say so in a sentence and still wait.
+
 ## Teaching me best practices
 
 I want to learn good habits while I learn Flask, so:
