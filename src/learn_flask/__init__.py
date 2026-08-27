@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from flask import Flask
 from flask_jwt_extended import JWTManager
+from flask_migrate import Migrate
 from flask_smorest import Api
 
 from learn_flask.blueprints.item import item_blp
@@ -51,6 +52,7 @@ def create_app():
     app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=30)
 
     db.init_app(app)
+    migrate = Migrate(app, db)
 
     jwt = JWTManager(app)
 
@@ -69,8 +71,9 @@ def create_app():
 
     api = Api(app)
 
-    with app.app_context():
-        db.create_all()
+    # NOTE: No need to use this as, we are using alembic
+    # with app.app_context():
+    #     db.create_all()
 
     api.register_blueprint(store_blp)
     api.register_blueprint(item_blp)

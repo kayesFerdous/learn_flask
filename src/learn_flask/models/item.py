@@ -11,6 +11,7 @@ class ItemModel(Base):
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     name: Mapped[str] = mapped_column(nullable=False)
+    description: Mapped[str] = mapped_column()
     price: Mapped[float] = mapped_column(nullable=False)
 
     store_id: Mapped[int] = mapped_column(db.ForeignKey("stores.id"), nullable=False)
