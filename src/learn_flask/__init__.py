@@ -43,6 +43,17 @@ def create_app():
         "DATABASE_URL", "sqlite:///data.db"
     )
 
+    # Serverless Postgres (Neon) suspends the database when idle, which kills
+    # every pooled connection. pool_pre_ping checks a connection is still alive
+    # before handing it to a request and silently replaces it if not -- without
+    # this you get a random OperationalError on the first request after a quiet
+    # period. Harmless against the local Postgres container too, so it needs no
+    # dev/prod branching.
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+    }
+
     # Dev-only fallback. In production JWT_SECRET_KEY must come from the
     # environment -- anyone who knows it can forge a token for any user.
     app.config["JWT_SECRET_KEY"] = os.getenv(
