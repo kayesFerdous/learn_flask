@@ -1,4 +1,9 @@
-from .item import ItemQuerySchema, ItemSchema, ItemUpdateSchema
+from .item import (
+    ItemQuerySchema,
+    ItemSchema,
+    ItemSearchSchema,
+    ItemUpdateSchema,
+)
 from .message import MessageSchema
 from .plain import PlainItemSchema, PlainStoreSchema, PlainTagSchema
 from .store import StoreSchema, StoreUpdateSchema
@@ -8,6 +13,7 @@ from .user import TokenSchema, UserLoginSchema, UserSchema, UserUpdateSchema
 __all__ = [
     "ItemQuerySchema",
     "ItemSchema",
+    "ItemSearchSchema",
     "ItemUpdateSchema",
     "MessageSchema",
     "PlainItemSchema",
