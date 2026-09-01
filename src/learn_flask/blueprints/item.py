@@ -1,8 +1,8 @@
 from flask.views import MethodView
 from flask_smorest import Blueprint
 
-from learn_flask.extensions import db
 from learn_flask.blueprints import get_item_or_404, get_store_or_404
+from learn_flask.extensions import db
 from learn_flask.models import ItemModel
 from learn_flask.schemas import (
     ItemQuerySchema,
@@ -10,7 +10,6 @@ from learn_flask.schemas import (
     ItemUpdateSchema,
     MessageSchema,
 )
-
 
 item_blp = Blueprint(
     "Items", "items", url_prefix="/stores", description="Operations on items in a store"
@@ -39,12 +38,12 @@ class ItemList(MethodView):
 class Item(MethodView):
     @item_blp.response(200, ItemSchema)
     def get(self, store_id, item_id):
-        return get_item_or_404(store_id, item_id)
+        return get_item_or_404(item_id, store_id)
 
     @item_blp.arguments(ItemUpdateSchema)
     @item_blp.response(200, ItemSchema)
     def patch(self, item_data, store_id, item_id):
-        item = get_item_or_404(store_id, item_id)
+        item = get_item_or_404(item_id, store_id)
         for field, value in item_data.items():
             setattr(item, field, value)
         db.session.commit()
@@ -52,7 +51,7 @@ class Item(MethodView):
 
     @item_blp.response(200, MessageSchema)
     def delete(self, store_id, item_id):
-        item = get_item_or_404(store_id, item_id)
+        item = get_item_or_404(item_id, store_id)
         db.session.delete(item)
         db.session.commit()
         return {"message": f"Item '{item_id}' deleted."}

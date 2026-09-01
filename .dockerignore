@@ -23,6 +23,12 @@ wheels/
 .env
 *.env
 
+# Flask instance folder — your local sqlite db lives here. git ignores it, so
+# without this line local images get a pre-made database that Render never has,
+# and "works locally, broken on deploy" bugs stay hidden.
+**/instance/
+**/*.db
+
 # Docker's own files aren't needed inside the image
 Dockerfile
 .dockerignore

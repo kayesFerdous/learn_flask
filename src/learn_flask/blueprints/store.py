@@ -2,11 +2,10 @@ from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from sqlalchemy.exc import IntegrityError
 
-from learn_flask.extensions import db
 from learn_flask.blueprints import get_store_or_404
+from learn_flask.extensions import db
 from learn_flask.models import StoreModel
 from learn_flask.schemas import MessageSchema, StoreSchema
-
 
 store_blp = Blueprint(
     "Stores", "stores", url_prefix="/stores", description="Operations on stores"

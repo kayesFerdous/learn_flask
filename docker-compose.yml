@@ -1,4 +1,59 @@
 services:
+  db:
+    image: postgres:18-alpine
+
+    container_name: learn-flask-db
+
+    # Postgres creates this user/database the first time the volume is empty.
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+    # Named volume: the data lives outside the container, so `docker compose
+    # down` and rebuilds don't wipe your rows. Only `down -v` deletes it.
+    # Postgres 18+ wants the mount at /var/lib/postgresql, NOT the older
+    # /var/lib/postgresql/data — the image refuses to start otherwise.
+    volumes:
+      - pgdata:/var/lib/postgresql
+
+    # Loopback only. A bare "5432:5432" would expose Postgres to your whole
+    # network. This lets the flask CLI (and psql, or a GUI client) on your Mac
+    # reach it, and nothing else.
+    ports:
+      - "127.0.0.1:5432:5432"
+
+    # depends_on alone only waits for the container to START. Postgres needs a
+    # few more seconds before it accepts connections, and the app runs
+    # `flask db upgrade` immediately — so it would crash. This healthcheck is
+    # what makes "wait for the db" actually mean it.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine
+
+    container_name: learn-flask-redis
+
+    # Queued jobs live here. The volume means a job survives a restart of this
+    # container instead of being silently dropped.
+    volumes:
+      - redisdata:/data
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+    restart: unless-stopped
+
   api:
     build: .
     image: learn-flask:1.0
@@ -8,4 +63,48 @@ services:
     ports:
       - "3000:3000"
 
+    # Reads .env at RUN time (not build time) and passes it into the container.
+    env_file:
+      - .env
+
+    # `environment:` wins over `env_file:`. .env points DATABASE_URL at
+    # localhost so the flask CLI on the host works; inside the network Postgres
+    # is reachable as `db` instead, so it gets overridden here. One .env, two
+    # correct addresses, nothing to remember.
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+
+    # Don't start until Postgres reports healthy above.
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
     restart: unless-stopped
+
+  worker:
+    # Same image as api, but instead of gunicorn it runs rq's own worker
+    # command. No worker script of ours -- `rq worker` imports the job
+    # function straight from learn_flask.email when a job arrives.
+    build: .
+    image: learn-flask:1.0
+
+    container_name: learn-flask-worker
+
+    command: ["rq", "worker", "--url", "redis://redis:6379/0", "email"]
+
+    # Only the Brevo settings; the job never touches the database.
+    env_file:
+      - .env
+
+    depends_on:
+      redis:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
