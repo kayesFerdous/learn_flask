@@ -76,6 +76,18 @@ class BusinessRuleError(StoreAPIError):
     message = "That request breaks a rule."
 
 
+class ServiceUnavailableError(StoreAPIError):
+    """A dependency this app needs is not answering. Almost always the database.
+
+    503 and not 500 on purpose. 500 means "this app is broken"; 503 means "try
+    again shortly". Load balancers and orchestrators treat them differently --
+    a 503 gets a container pulled out of rotation and put back when it recovers.
+    """
+
+    status_code = 503
+    message = "The service is temporarily unavailable."
+
+
 def register_error_handlers(app):
     """Teach the app to answer every StoreAPIError with the same JSON shape.
 

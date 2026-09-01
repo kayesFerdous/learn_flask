@@ -105,7 +105,8 @@ not forgotten -- see the reasons below.
 | 6 | Email Strategy (`EmailSender` -> Brevo / Console / Null) | done |
 | 7 | Orders feature (`quantity`, `POST /orders`) | **skipped** |
 | 8 | Tests with pytest | **skipped** |
-| 9 | README, CI, `/health`, pagination, rate limit | not started |
+| 9 | `/health` + docker healthcheck | done |
+| 10 | README, CI, pagination, rate limit | not started |
 
 **Why no repository layer (5).** SQLAlchemy's `Session` already is a repository
 plus a unit of work. Wrapping it in another layer for an app this size is the
@@ -171,7 +172,9 @@ returns only `__init__.py`, `extensions.py` and `resources/`. Nothing in
 
 ### The API
 
-Stores, items, tags, users. Marshmallow validation, JWT with a revoke list,
+`GET /health` reports 200 when the app can reach the database and 503 when it
+cannot, and the `api` container's docker healthcheck calls it. Then stores,
+items, tags, users. Marshmallow validation, JWT with a revoke list,
 refresh-token rotation, fresh-token rules on dangerous actions, Alembic
 migrations, and an rq worker for the welcome email. The item collections also
 answer **QUERY** (RFC 10008) for filters too complex for a query string.

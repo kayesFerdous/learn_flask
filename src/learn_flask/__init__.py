@@ -19,6 +19,7 @@ from learn_flask.config import get_config
 from learn_flask.errors import register_error_handlers
 from learn_flask.extensions import db, jwt, migrate
 from learn_flask.notifications import build_email_sender
+from learn_flask.resources.health import health_blp
 from learn_flask.resources.item import item_blp
 from learn_flask.resources.store import store_blp
 from learn_flask.resources.tag import tag_blp
@@ -102,6 +103,7 @@ def _register_blueprints(app):
     """
     api = Api(app)
 
+    api.register_blueprint(health_blp)
     api.register_blueprint(store_blp)
     api.register_blueprint(item_blp)
     api.register_blueprint(tag_blp)

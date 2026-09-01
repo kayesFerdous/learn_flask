@@ -1,3 +1,4 @@
+from .health import HealthSchema
 from .item import (
     ItemQuerySchema,
     ItemSchema,
@@ -11,6 +12,7 @@ from .tag import TagAndItemSchema, TagSchema, TagUpdateSchema
 from .user import TokenSchema, UserLoginSchema, UserSchema, UserUpdateSchema
 
 __all__ = [
+    "HealthSchema",
     "ItemQuerySchema",
     "ItemSchema",
     "ItemSearchSchema",

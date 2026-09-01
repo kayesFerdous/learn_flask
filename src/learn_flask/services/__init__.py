@@ -11,12 +11,14 @@ argument here -- and that is exactly what the test suite does.
 
 from dataclasses import dataclass
 
+from learn_flask.services.health_service import HealthService
 from learn_flask.services.item_service import ItemService
 from learn_flask.services.store_service import StoreService
 from learn_flask.services.tag_service import TagService
 from learn_flask.services.user_service import UserService
 
 __all__ = [
+    "HealthService",
     "ItemService",
     "Services",
     "StoreService",
@@ -31,6 +33,7 @@ class Services:
     """Every service, in one object, so routes fetch them with one lookup."""
 
     users: UserService
+    health: HealthService
     stores: StoreService
     items: ItemService
     tags: TagService
@@ -41,6 +44,7 @@ def build_services(session, email_sender):
     items = ItemService(session, stores)
     return Services(
         users=UserService(session, email_sender),
+        health=HealthService(session),
         stores=stores,
         items=items,
         tags=TagService(session, stores, items),
