@@ -127,54 +127,46 @@ resources/  ->  services/  ->  models/
    HTTP          rules         tables
 ```
 
-Verified, not just claimed -- `grep` for a Flask import across the codebase
-returns only `__init__.py`, `extensions.py` and `resources/`. Nothing in
-`services/`, `notifications/` or `models/` has ever heard of Flask.
+Nothing in `services/`, `notifications.py` or `models/` imports Flask. Only
+`__init__.py`, `extensions.py` and `resources/` do. `grep` proves it in one
+command.
 
 - `resources/` (renamed from `blueprints/`, the flask-smorest convention for
-  `MethodView` classes) -- reads the request, calls one service method, returns.
-  Every route is one or two lines now.
-- `services/` -- all the rules. `UserService` takes a `session` and an
-  `EmailSender` in its constructor; nothing is imported from a global.
-- `services/__init__.py` -- `build_services()`, the composition root: the one
-  place concrete objects get chosen and plugged together.
+  `MethodView`) — reads the request, calls one service method, returns.
+- `services/` — all the rules. Each service takes what it needs in its
+  constructor, so nothing is pulled from a global.
+- `services/__init__.py` — `build_services()`, the one place objects get wired.
 
 ### Errors
 
-- `errors.py` -- `StoreAPIError` and five subclasses, plus
-  `register_error_handlers()`. Services `raise`, one handler translates to JSON.
-  Shape matches flask-smorest's own errors, so clients see one format.
-- Status codes shifted on purpose: duplicate name/store is now **409** (was 400)
-  and broken domain rules are **422** (was 400).
+`errors.py` — `StoreAPIError` and six subclasses, plus one handler. Services
+raise, the handler turns them into JSON matching flask-smorest's shape.
+Duplicate name/store is **409** and broken domain rules are **422** (both were
+400 before).
 
-### Email (the Strategy pattern)
+### Email
 
-- `notifications/base.py` -- `EmailSender` ABC with one method, and a frozen
-  `Email` dataclass.
-- `notifications/senders.py` -- `BrevoSender`, `ConsoleSender`, `NullSender`,
-  `RecordingSender`.
-- `notifications/queued.py` -- `QueuedSender`, a real GoF **Decorator**: it *is*
-  an `EmailSender` and *has* an `EmailSender`, and adds "do this in a background
-  worker". rq pickles the wrapped sender and the `Email` and runs `deliver()`
-  in the worker process. Verified with a real pickle round-trip.
-- `notifications/__init__.py` -- `build_email_sender()`, a Factory built from a
-  lookup table, same shape as `get_config()`.
+`notifications.py` — one `EmailSender` interface, `BrevoSender` and
+`ConsoleSender` behind it, picked by `build_email_sender()`. `QueuedSender`
+wraps either one and hands the work to rq instead.
 
-### Config and factory
+### Config
 
-- `config.py` -- `BaseConfig` / `DevConfig` / `TestConfig` / `ProdConfig`, chosen
-  by `get_config()` from `APP_ENV`. Environment is read in `__init__`, never in
-  a class body (class bodies run at import time, before `.env` loads).
-  `ProdConfig` raises if `DATABASE_URL` or `JWT_SECRET_KEY` are missing.
-- `extensions.py` -- `db`, `migrate`, `jwt` created once and shared. The
-  **Singleton** pattern, free from Python's module system. No `__new__` tricks.
-- `create_app()` is five wiring calls and nothing else.
+`config.py` — one `Config` class. `APP_ENV=production` makes it refuse to start
+without a real `DATABASE_URL` and `JWT_SECRET_KEY`. `extensions.py` holds `db`,
+`migrate` and `jwt`, created once and attached with `init_app()`.
 
 ### The API
 
 `GET /health` reports 200 when the app can reach the database and 503 when it
-cannot, and the `api` container's docker healthcheck calls it. Then stores,
-items, tags, users. Marshmallow validation, JWT with a revoke list,
-refresh-token rotation, fresh-token rules on dangerous actions, Alembic
-migrations, and an rq worker for the welcome email. The item collections also
-answer **QUERY** (RFC 10008) for filters too complex for a query string.
+cannot; the `api` container's docker healthcheck calls it. Then stores, items,
+tags, users — with marshmallow validation, JWT plus a revoke list, refresh-token
+rotation, Alembic migrations, and an rq worker for the welcome email. The item
+collections also answer **QUERY** (RFC 10008).
+
+## House style
+
+Comments stay near **10% of lines**, which is where the rest of this project
+sits. Comment the *why* of something non-obvious — a rollback, a race, a driver
+quirk. Do not narrate what the code already says, and do not name design
+patterns in docstrings: that belongs in the presentation, not the source.

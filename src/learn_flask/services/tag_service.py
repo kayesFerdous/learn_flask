@@ -1,10 +1,10 @@
-"""Business rules for tags, and for linking tags to items."""
-
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from learn_flask.errors import BusinessRuleError, ConflictError, NotFoundError
 from learn_flask.models import TagModel
+
+TAKEN = "This store already has a tag with that name."
 
 
 class TagService:
@@ -29,27 +29,15 @@ class TagService:
     def create(self, store_id, data):
         self.stores.get(store_id)
         tag = TagModel(**data, store_id=store_id)
-        try:
-            self.session.add(tag)
-            self.session.commit()
-        except IntegrityError:
-            self.session.rollback()
-            raise ConflictError(
-                "This store already has a tag with that name."
-            ) from None
+        self.session.add(tag)
+        self._commit()
         return tag
 
     def update(self, tag_id, data):
         tag = self.get(tag_id)
         for field, value in data.items():
             setattr(tag, field, value)
-        try:
-            self.session.commit()
-        except IntegrityError:
-            self.session.rollback()
-            raise ConflictError(
-                "This store already has a tag with that name."
-            ) from None
+        self._commit()
         return tag
 
     def delete(self, tag_id):
@@ -61,15 +49,10 @@ class TagService:
         self.session.delete(tag)
         self.session.commit()
 
-    # --- the item <-> tag link --------------------------------------------
-
     def link_to_item(self, item_id, tag_id):
         item = self.items.get(item_id)
         tag = self.get(tag_id)
 
-        # A rule marshmallow could never check: it needs two rows from the
-        # database to decide. This is exactly the kind of thing that has no
-        # business sitting in a route function.
         if item.store_id != tag.store_id:
             raise BusinessRuleError("Item and tag must belong to the same store.")
 
@@ -88,3 +71,10 @@ class TagService:
         item.tags.remove(tag)
         self.session.commit()
         return item, tag
+
+    def _commit(self):
+        try:
+            self.session.commit()
+        except IntegrityError:
+            self.session.rollback()
+            raise ConflictError(TAKEN) from None

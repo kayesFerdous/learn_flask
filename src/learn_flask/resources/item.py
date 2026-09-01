@@ -36,8 +36,6 @@ class ItemsAcrossStores(MethodView):
     @item_blp.arguments(ItemSearchSchema)
     @item_blp.response(200, ItemSchema(many=True))
     def query(self, filters):
-        # QUERY is safe and idempotent like GET -- it only reads. Use POST if
-        # you ever need this route to change something.
         return services().items.search(filters)
 
 

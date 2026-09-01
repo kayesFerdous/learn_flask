@@ -1,9 +1,3 @@
-"""Account routes.
-
-Token creation stays here on purpose. A JWT is how *this API* proves who you
-are over HTTP -- it is a transport detail, not a rule of the store. UserService
-deals in users and passwords; it never sees a token.
-"""
 
 from datetime import datetime, timezone
 from uuid import UUID
@@ -40,7 +34,6 @@ def _token_pair(identity, fresh):
 
 
 def _expires_at(token):
-    """Turn the JWT's `exp` timestamp into the naive UTC datetime the table wants."""
     return datetime.fromtimestamp(token["exp"], tz=timezone.utc).replace(tzinfo=None)
 
 
@@ -81,8 +74,8 @@ class User(MethodView):
     def get(self, user_id):
         return services().users.get(user_id)
 
-    # fresh=True for the same reason delete uses it: changing an email or
-    # password is account-takeover material, so a refreshed token is not enough.
+    # Changing an email or password is account-takeover material, so a
+    # refreshed token is not enough.
     @jwt_required(fresh=True)
     @user_blp.doc(security=[{"bearerAuth": []}])
     @user_blp.arguments(UserUpdateSchema)

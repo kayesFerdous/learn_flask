@@ -1,13 +1,4 @@
-"""Building the services, in one place.
-
-build_services() is the composition root: the single spot in the whole app where
-concrete objects get chosen and plugged into each other. Everywhere else works
-with whatever it was handed.
-
-That is the pay-off of injecting dependencies instead of importing them. To make
-the entire application send emails to a list instead of to Brevo, you change one
-argument here -- and that is exactly what the test suite does.
-"""
+"""build_services() is the one place concrete objects get wired together."""
 
 from dataclasses import dataclass
 
@@ -30,8 +21,6 @@ __all__ = [
 
 @dataclass(frozen=True)
 class Services:
-    """Every service, in one object, so routes fetch them with one lookup."""
-
     users: UserService
     health: HealthService
     stores: StoreService

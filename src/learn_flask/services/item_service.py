@@ -1,5 +1,3 @@
-"""Business rules for items, including the QUERY search."""
-
 from sqlalchemy import select
 
 from learn_flask.errors import NotFoundError
@@ -9,12 +7,7 @@ from learn_flask.models import ItemModel, TagModel
 class ItemService:
     def __init__(self, session, stores):
         self.session = session
-        # A service is allowed to lean on another service. Item lookups have to
-        # check the store exists, and StoreService already knows how to do that
-        # and how to raise the right error -- so do not write it twice.
         self.stores = stores
-
-    # --- reading ----------------------------------------------------------
 
     def get(self, item_id, store_id=None):
         item = self.session.get(ItemModel, item_id)
@@ -27,11 +20,9 @@ class ItemService:
         return self.session.scalars(select(ItemModel).filter_by(**filters)).all()
 
     def list_for_store(self, store_id, filters):
-        store = self.stores.get(store_id)
-        return store.items.filter_by(**filters).all()
+        return self.stores.get(store_id).items.filter_by(**filters).all()
 
     def search(self, filters, store_id=None):
-        """The body of a QUERY request: filters that combine."""
         stmt = select(ItemModel)
         if store_id is not None:
             self.stores.get(store_id)
@@ -47,12 +38,10 @@ class ItemService:
         if "max_price" in filters:
             stmt = stmt.where(ItemModel.price <= filters["max_price"])
         if "tags" in filters:
-            # .any() becomes an EXISTS subquery, so an item is returned once
-            # even when several of its tags match -- a join would duplicate rows.
+            # .any() becomes an EXISTS subquery, so an item comes back once even
+            # when several of its tags match. A join would duplicate rows.
             stmt = stmt.where(ItemModel.tags.any(TagModel.name.in_(filters["tags"])))
         return stmt
-
-    # --- writing ----------------------------------------------------------
 
     def create(self, store_id, data):
         self.stores.get(store_id)
@@ -69,6 +58,5 @@ class ItemService:
         return item
 
     def delete(self, item_id, store_id):
-        item = self.get(item_id, store_id)
-        self.session.delete(item)
+        self.session.delete(self.get(item_id, store_id))
         self.session.commit()
