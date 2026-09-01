@@ -152,9 +152,11 @@ wraps either one and hands the work to rq instead.
 
 ### Config
 
-`config.py` — one `Config` class. `APP_ENV=production` makes it refuse to start
-without a real `DATABASE_URL` and `JWT_SECRET_KEY`. `extensions.py` holds `db`,
-`migrate` and `jwt`, created once and attached with `init_app()`.
+`config.py` — one `Settings` class built on **pydantic-settings**, same as the
+one in agens. Every setting is a typed field, `.env` is read automatically, and
+`APP_ENV=production` makes it refuse to start without a real `DATABASE_URL` and
+`JWT_SECRET_KEY`. `extensions.py` holds `db`, `migrate` and `jwt`, created once
+and attached with `init_app()`.
 
 ### The API
 

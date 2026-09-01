@@ -3,7 +3,7 @@ from flask import Flask
 from flask_smorest import Api
 from rq import Queue
 
-from learn_flask.config import Config
+from learn_flask.config import Settings
 from learn_flask.errors import register_error_handlers
 from learn_flask.extensions import db, jwt, migrate
 from learn_flask.notifications import build_email_sender
@@ -17,7 +17,7 @@ from learn_flask.services import build_services
 
 def create_app(config=None):
     app = Flask(__name__)
-    app.config.from_object(config or Config())
+    app.config.from_object(config or Settings())
 
     db.init_app(app)
     migrate.init_app(app, db)
