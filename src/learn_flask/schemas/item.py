@@ -10,6 +10,7 @@ class ItemSchema(PlainItemSchema):
 
 class ItemUpdateSchema(Schema):
     name = fields.Str()
+    description = fields.Str()
     price = fields.Float(validate=validate.Range(min=0))
 
 

@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from learn_flask.blueprints import get_store_or_404
 from learn_flask.extensions import db
 from learn_flask.models import StoreModel
-from learn_flask.schemas import MessageSchema, StoreSchema
+from learn_flask.schemas import MessageSchema, StoreSchema, StoreUpdateSchema
 
 store_blp = Blueprint(
     "Stores", "stores", url_prefix="/stores", description="Operations on stores"
@@ -37,6 +37,20 @@ class Store(MethodView):
     @store_blp.response(200, StoreSchema)
     def get(self, store_id):
         return get_store_or_404(store_id)
+
+    @store_blp.arguments(StoreUpdateSchema)
+    @store_blp.response(200, StoreSchema)
+    def patch(self, store_data, store_id):
+        store = get_store_or_404(store_id)
+        for field, value in store_data.items():
+            setattr(store, field, value)
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            abort(400, message="A store with this name already exists.")
+
+        return store
 
     @store_blp.response(200, MessageSchema)
     def delete(self, store_id):

@@ -5,9 +5,21 @@ from sqlalchemy.exc import IntegrityError
 from learn_flask.blueprints import get_item_or_404, get_store_or_404, get_tag_or_404
 from learn_flask.extensions import db
 from learn_flask.models import TagModel
-from learn_flask.schemas import MessageSchema, TagAndItemSchema, TagSchema
+from learn_flask.schemas import (
+    MessageSchema,
+    TagAndItemSchema,
+    TagSchema,
+    TagUpdateSchema,
+)
 
 tag_blp = Blueprint("Tags", "tags", description="Operations on tags")
+
+
+@tag_blp.route("/tags")
+class TagList(MethodView):
+    @tag_blp.response(200, TagSchema(many=True))
+    def get(self):
+        return db.session.scalars(db.select(TagModel)).all()
 
 
 @tag_blp.route("/stores/<int:store_id>/tags")
@@ -66,6 +78,20 @@ class Tag(MethodView):
     @tag_blp.response(200, TagSchema)
     def get(self, tag_id):
         return get_tag_or_404(tag_id)
+
+    @tag_blp.arguments(TagUpdateSchema)
+    @tag_blp.response(200, TagSchema)
+    def patch(self, tag_data, tag_id):
+        tag = get_tag_or_404(tag_id)
+        for field, value in tag_data.items():
+            setattr(tag, field, value)
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            abort(400, message="This store already has a tag with that name.")
+
+        return tag
 
     @tag_blp.response(200, MessageSchema)
     def delete(self, tag_id):

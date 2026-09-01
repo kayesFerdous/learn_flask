@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from uuid import UUID
 
 from flask.views import MethodView
 from flask_jwt_extended import (
@@ -21,6 +22,7 @@ from learn_flask.schemas import (
     TokenSchema,
     UserLoginSchema,
     UserSchema,
+    UserUpdateSchema,
 )
 
 user_blp = Blueprint(
@@ -47,13 +49,21 @@ def revoke(token):
     )
 
 
-def reject_if_taken(name, email):
-    if db.session.scalar(db.select(UserModel).where(UserModel.name == name)):
+def reject_if_taken(name, email, exclude_id=None):
+    """exclude_id skips one row, so updating a user does not collide with itself."""
+
+    def taken(column, value):
+        query = db.select(UserModel).where(column == value)
+        if exclude_id is not None:
+            query = query.where(UserModel.id != exclude_id)
+        return db.session.scalar(query) is not None
+
+    if name is not None and taken(UserModel.name, name):
         abort(
             400,
             message=f"The username '{name}' already exists. Please pick another one.",
         )
-    if db.session.scalar(db.select(UserModel).where(UserModel.email == email)):
+    if email is not None and taken(UserModel.email, email):
         abort(400, message=f"An account with the email '{email}' already exists.")
 
 
@@ -119,6 +129,36 @@ class User(MethodView):
     def get(self, user_id):
         return get_user_or_404(user_id)
 
+    # fresh=True for the same reason delete uses it: changing an email or
+    # password is account-takeover material, so a refreshed token is not enough.
+    @jwt_required(fresh=True)
+    @user_blp.doc(security=[{"bearerAuth": []}])
+    @user_blp.arguments(UserUpdateSchema)
+    @user_blp.response(200, UserSchema)
+    def patch(self, user_data, user_id):
+        user = get_user_or_404(user_id)
+        if str(user.id) != get_jwt_identity():
+            abort(403, message="You can only update your own account.")
+
+        name, email = user_data.get("name"), user_data.get("email")
+        reject_if_taken(name, email, exclude_id=user.id)
+
+        if "password" in user_data:
+            user.password_hash = pbkdf2_sha256.hash(user_data.pop("password"))
+        for field, value in user_data.items():
+            setattr(user, field, value)
+
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            # Same race as registration: another request can take the name or
+            # email between the check above and the commit.
+            reject_if_taken(name, email, exclude_id=user.id)
+            raise
+
+        return user
+
     @jwt_required(fresh=True)
     @user_blp.doc(security=[{"bearerAuth": []}])
     @user_blp.response(200, MessageSchema)
@@ -127,6 +167,15 @@ class User(MethodView):
         db.session.delete(user)
         db.session.commit()
         return {"message": f"User {user_id} deleted."}
+
+
+@user_blp.route("/me")
+class CurrentUser(MethodView):
+    @jwt_required()
+    @user_blp.doc(security=[{"bearerAuth": []}])
+    @user_blp.response(200, UserSchema)
+    def get(self):
+        return get_user_or_404(UUID(get_jwt_identity()))
 
 
 @user_blp.route("/logout")

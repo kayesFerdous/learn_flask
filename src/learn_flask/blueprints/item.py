@@ -11,12 +11,18 @@ from learn_flask.schemas import (
     MessageSchema,
 )
 
-item_blp = Blueprint(
-    "Items", "items", url_prefix="/stores", description="Operations on items in a store"
-)
+item_blp = Blueprint("Items", "items", description="Operations on items in a store")
 
 
-@item_blp.route("/<int:store_id>/items")
+@item_blp.route("/items")
+class ItemsAcrossStores(MethodView):
+    @item_blp.arguments(ItemQuerySchema, location="query")
+    @item_blp.response(200, ItemSchema(many=True))
+    def get(self, filters):
+        return db.session.scalars(db.select(ItemModel).filter_by(**filters)).all()
+
+
+@item_blp.route("/stores/<int:store_id>/items")
 class ItemList(MethodView):
     @item_blp.arguments(ItemQuerySchema, location="query")
     @item_blp.response(200, ItemSchema(many=True))
@@ -34,7 +40,7 @@ class ItemList(MethodView):
         return item
 
 
-@item_blp.route("/<int:store_id>/items/<uuid:item_id>")
+@item_blp.route("/stores/<int:store_id>/items/<uuid:item_id>")
 class Item(MethodView):
     @item_blp.response(200, ItemSchema)
     def get(self, store_id, item_id):
