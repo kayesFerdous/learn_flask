@@ -58,20 +58,120 @@ I want to learn good habits while I learn Flask, so:
 - After changing `[project.scripts]`, run `uv sync` — that section is only read at
   install time. Changes to `main.py` need no sync.
 - Install a package: `uv add <package>` (this updates `pyproject.toml` for me).
-- Docker: `docker build -t learn-flask .` then `docker run --rm -p 3000:3000 learn-flask`.
-  The container runs **gunicorn**, not `app.run()` — `uv run server` stays for local dev only.
+- Docker: `docker compose up --build`. The container runs **gunicorn**, not
+  `app.run()` — `uv run server` stays for local dev only.
+- Postgres publishes on host port **5432**.
+- The refactor described below lives on the `layered-architecture` branch, cut
+  from `postgres-migrations-and-email`.
 
-## The API so far
+## Where this project came from, and what it is for
 
-An in-memory product list in `main.py` (a plain Python list — it resets every
-restart). Routes:
+This project was built by following a Udemy course. The
+`layered-architecture` branch is the part that is mine: a refactor I am
+presenting at my internship. So the **point of that branch is the architecture,
+not the feature count**. Adding another route is worth almost nothing here.
+Making the existing code well-structured is worth everything.
 
-- `GET /products` — filter by any field via query string, e.g. `?category=Audio`
-- `GET /products/<id>` — one product
-- `POST /products` — create; server assigns the id, returns `201`
-- `PATCH /products/<id>` — partial update
-- `DELETE /products/<id>` — remove
+Keeping it as a branch rather than a new repo is deliberate: `git diff main` is
+the presentation. The before and the after sit side by side in one history.
 
-Known gaps, not yet done: `GET`/`DELETE` return `200` on a missing id instead of
-`404`, errors return plain text instead of JSON, and neither `POST` nor `PATCH`
-validates input (a missing or non-numeric field is a `500`).
+The goal, in one line:
+
+> Routes stay thin. Business rules live in services. Every design pattern in
+> here is present because something real needed it.
+
+The one-way rule, which is the whole idea:
+
+```
+resources/  ->  services/  ->  models/
+   HTTP          rules        tables
+```
+
+A service never imports Flask. Only `resources/` knows what HTTP is. There is no
+repository layer on purpose — see the plan table below.
+
+## The plan, and where I am in it
+
+One numbering, so there is no confusion. Steps 5 and 7 were skipped by choice,
+not forgotten -- see the reasons below.
+
+| # | Step | Status |
+| - | ---- | ------ |
+| 1 | Copy + rename from `learn_flask` | done |
+| 2 | Config classes + app factory | done |
+| 3 | Split into layers: `resources/` -> `services/` | done |
+| 4 | Custom error types + one error handler | done |
+| 5 | Repository layer | **skipped on purpose** |
+| 6 | Email Strategy (`EmailSender` -> Brevo / Console / Null) | done |
+| 7 | Orders feature (`quantity`, `POST /orders`) | **skipped** |
+| 8 | Tests with pytest | **skipped** |
+| 9 | README, CI, `/health`, pagination, rate limit | not started |
+
+**Why no repository layer (5).** SQLAlchemy's `Session` already is a repository
+plus a unit of work. Wrapping it in another layer for an app this size is the
+classic over-engineered-Flask mistake. Services take a `session` in their
+constructor, which keeps them injectable without the extra layer. Be ready to
+say this out loud -- knowing when *not* to add a pattern is the point.
+
+**Why no orders and no tests (7, 8).** My call, to keep the scope down. The
+cost of skipping tests: `NullSender` and `RecordingSender` currently have no
+caller, so they read as decorative. If there is time, six tests fix that.
+
+## What is built so far
+
+### The layers
+
+```
+resources/  ->  services/  ->  models/
+   HTTP          rules         tables
+```
+
+Verified, not just claimed -- `grep` for a Flask import across the codebase
+returns only `__init__.py`, `extensions.py` and `resources/`. Nothing in
+`services/`, `notifications/` or `models/` has ever heard of Flask.
+
+- `resources/` (renamed from `blueprints/`, the flask-smorest convention for
+  `MethodView` classes) -- reads the request, calls one service method, returns.
+  Every route is one or two lines now.
+- `services/` -- all the rules. `UserService` takes a `session` and an
+  `EmailSender` in its constructor; nothing is imported from a global.
+- `services/__init__.py` -- `build_services()`, the composition root: the one
+  place concrete objects get chosen and plugged together.
+
+### Errors
+
+- `errors.py` -- `StoreAPIError` and five subclasses, plus
+  `register_error_handlers()`. Services `raise`, one handler translates to JSON.
+  Shape matches flask-smorest's own errors, so clients see one format.
+- Status codes shifted on purpose: duplicate name/store is now **409** (was 400)
+  and broken domain rules are **422** (was 400).
+
+### Email (the Strategy pattern)
+
+- `notifications/base.py` -- `EmailSender` ABC with one method, and a frozen
+  `Email` dataclass.
+- `notifications/senders.py` -- `BrevoSender`, `ConsoleSender`, `NullSender`,
+  `RecordingSender`.
+- `notifications/queued.py` -- `QueuedSender`, a real GoF **Decorator**: it *is*
+  an `EmailSender` and *has* an `EmailSender`, and adds "do this in a background
+  worker". rq pickles the wrapped sender and the `Email` and runs `deliver()`
+  in the worker process. Verified with a real pickle round-trip.
+- `notifications/__init__.py` -- `build_email_sender()`, a Factory built from a
+  lookup table, same shape as `get_config()`.
+
+### Config and factory
+
+- `config.py` -- `BaseConfig` / `DevConfig` / `TestConfig` / `ProdConfig`, chosen
+  by `get_config()` from `APP_ENV`. Environment is read in `__init__`, never in
+  a class body (class bodies run at import time, before `.env` loads).
+  `ProdConfig` raises if `DATABASE_URL` or `JWT_SECRET_KEY` are missing.
+- `extensions.py` -- `db`, `migrate`, `jwt` created once and shared. The
+  **Singleton** pattern, free from Python's module system. No `__new__` tricks.
+- `create_app()` is five wiring calls and nothing else.
+
+### The API
+
+Stores, items, tags, users. Marshmallow validation, JWT with a revoke list,
+refresh-token rotation, fresh-token rules on dangerous actions, Alembic
+migrations, and an rq worker for the welcome email. The item collections also
+answer **QUERY** (RFC 10008) for filters too complex for a query string.

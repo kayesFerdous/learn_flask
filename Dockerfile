@@ -24,6 +24,11 @@ EXPOSE 3000
 # `flask db upgrade` needs to know which app to load.
 ENV FLASK_APP=learn_flask
 
+# Picks ProdConfig in config.py, which refuses to start if DATABASE_URL or
+# JWT_SECRET_KEY are missing. Better a crash here than a live app signing
+# tokens with the dev secret that is committed to git.
+ENV APP_ENV=production
+
 # Apply any pending migrations, THEN serve. Gunicorn, not app.run() —
 # that one is Flask's development server.
 CMD ["sh", "-c", "flask db upgrade && gunicorn --bind 0.0.0.0:3000 'learn_flask:create_app()'"]

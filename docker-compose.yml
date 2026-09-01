@@ -86,8 +86,9 @@ services:
 
   worker:
     # Same image as api, but instead of gunicorn it runs rq's own worker
-    # command. No worker script of ours -- `rq worker` imports the job
-    # function straight from learn_flask.email when a job arrives.
+    # command. No worker script of ours -- a job arrives carrying a pickled
+    # EmailSender and Email, and `rq worker` imports deliver() from
+    # learn_flask.notifications.queued to run it.
     build: .
     image: learn-flask:1.0
 
