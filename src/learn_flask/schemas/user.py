@@ -22,3 +22,9 @@ class UserLoginSchema(Schema):
 class TokenSchema(Schema):
     access_token = fields.Str(dump_only=True)
     refresh_token = fields.Str(dump_only=True)
+
+
+class UserUpdateSchema(Schema):
+    name = fields.Str(validate=validate.Length(min=3, max=32))
+    email = fields.Email(validate=validate.Length(min=1, max=80))
+    password = fields.Str(load_only=True, validate=validate.Length(min=8))
