@@ -32,6 +32,19 @@ A learning project. I'm new to Flask, and to Python packaging/imports in general
   reproduce the error. It's *writing to files* I want you to hold off on.
 - If you think a change is urgent, say so in a sentence and still wait.
 
+## Don't touch git without asking
+
+- **Never commit unless I ask.** Not even a clean, well-described commit at the
+  end of a task. Finish the work, tell me what changed, and stop. I decide when
+  something becomes a commit and what goes in it.
+- Same for anything else that rewrites history or leaves this machine:
+  `git add`, branch, merge, rebase, reset, tag, stash, push. Ask first.
+- Reading git is always fine — `status`, `diff`, `log`, `show`, `branch --list`.
+- If a change is worth committing, say so in one sentence and wait. Do not
+  stage it "ready to go" either; leave the working tree as you found it.
+- When I do ask for a commit: no `Co-Authored-By` line, and no mention of
+  Claude, AI, or any tool in the message.
+
 ## Teaching me best practices
 
 I want to learn good habits while I learn Flask, so:
